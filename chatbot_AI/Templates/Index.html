@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>AI Chatbot</title>
+  <link rel="icon" type="image/x-icon" href="https://img.icons8.com/ios-filled/50/ffffff/robot.png" />
+</head>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+      transition: background-color 0.3s, color 0.3s;
+    }
+
+    .dark-mode {
+      background-color: #121212;
+      color: #ffffff;
+    }
+
+    .chat-container {
+      max-width: 700px;
+      margin: 40px auto;
+      background-color: #ffffff;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      transition: background-color 0.3s;
+    }
+
+    .dark-mode .chat-container {
+      background-color: #1e1e1e;
+    }
+
+    .chat-header {
+      background-color: #4a90e2;
+      color: white;
+      padding: 15px 20px;
+      font-size: 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .toggle-btn {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      margin-left: 10px;
+    }
+
+    .chat-messages {
+      padding: 20px;
+      max-height: 500px;
+      overflow-y: auto;
+    }
+
+    .message {
+      display: flex;
+      margin-bottom: 15px;
+      align-items: flex-start;
+    }
+
+    .message.user {
+      justify-content: flex-end;
+    }
+
+    .message.bot {
+      justify-content: flex-start;
+    }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      margin-right: 10px;
+    }
+
+    .message-content {
+      background-color: #e0e0e0;
+      padding: 10px 15px;
+      border-radius: 15px;
+      max-width: 70%;
+      line-height: 1.4;
+    }
+
+    .message.user .message-content {
+      background-color: #d1e7dd;
+    }
+
+    .dark-mode .message-content {
+      background-color: #333333;
+    }
+
+    .dark-mode .message.user .message-content {
+      background-color: #2e8b57;
+    }
+
+    .chat-input {
+      display: flex;
+      border-top: 1px solid #ccc;
+      padding: 15px;
+    }
+
+    #userInput {
+      flex: 1;
+      padding: 10px;
+      font-size: 16px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin-right: 10px;
+    }
+
+    #sendBtn,
+    #micBtn {
+      padding: 10px;
+      font-size: 16px;
+      background-color: #4a90e2;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-left: 5px;
+    }
+
+    #micBtn {
+      background-color: #ccc;
+      color: black;
+    }
+
+    .dark-mode #micBtn {
+      background-color: #444;
+      color: white;
+    }
+
+    .typing {
+      font-style: italic;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body>
+  <div class="chat-container">
+    <div class="chat-header">
+      💬 AI Chatbot
+      <div>
+        <button class="toggle-btn" onclick="toggleDarkMode()">🌓</button>
+        <button class="toggle-btn" onclick="clearChat()">🗑️</button>
+        <button class="toggle-btn" id="ttsToggleBtn" onclick="toggleTTS()">🔊 TTS: On</button>
+      </div>
+    </div>
+    <div id="messages" class="chat-messages"></div>
+    <div class="chat-input">
+      <input
+        type="text"
+        id="userInput"
+        placeholder="Type your message..."
+        onkeydown="handleEnter(event)"
+      />
+      <button id="micBtn" onclick="startSpeech()">🎤</button>
+      <button id="sendBtn" onclick="sendMessage()">Send</button>
+    </div>
+  </div>
+
+  <script>
+    let ttsEnabled = true;
+
+    function toggleDarkMode() {
+      document.body.classList.toggle("dark-mode");
+    }
+
+    function clearChat() {
+      if (confirm("Are you sure you want to clear the chat?")) {
+        document.getElementById("messages").innerHTML = "";
+      }
+    }
+
+    function handleEnter(event) {
+      if (event.key === "Enter") {
+        sendMessage();
+      }
+    }
+
+    async function sendMessage() {
+      const input = document.getElementById("userInput");
+      const message = input.value.trim();
+
+      if (!message) {
+        addMessage("bot", "⚠️ Please enter a message before sending.");
+        return;
+      }
+
+      addMessage("user", message);
+      input.value = "";
+
+      const typingId = addTyping();
+
+      try {
+        const response = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        });
+        const data = await response.json();
+
+        removeTyping(typingId);
+        addMessage("bot", data.reply);
+      } catch (err) {
+        removeTyping(typingId);
+        addMessage("bot", "❌ Error: Unable to connect.");
+      }
+    }
+
+    // Overwrite addMessage to include TTS when enabled
+    function addMessage(sender, text) {
+      const messagesDiv = document.getElementById("messages");
+      const messageDiv = document.createElement("div");
+      messageDiv.classList.add("message", sender);
+
+      const content = document.createElement("div");
+      content.classList.add("message-content");
+      content.innerText = text;
+
+      const avatar = document.createElement("img");
+      avatar.classList.add("avatar");
+
+      if (sender === "bot") {
+        avatar.src = "https://img.icons8.com/ios-filled/50/000000/robot-3.png";
+        avatar.alt = "Bot";
+        if (ttsEnabled) speak(text);
+      } else {
+        avatar.src = "https://img.icons8.com/ios-filled/50/user.png";
+        avatar.alt = "User";
+      }
+
+      messageDiv.appendChild(avatar);
+      messageDiv.appendChild(content);
+
+      messagesDiv.appendChild(messageDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    }
+
+    function addTyping() {
+      const messagesDiv = document.getElementById("messages");
+      const typingId = "typing-" + Date.now();
+      const typingDiv = document.createElement("div");
+      typingDiv.classList.add("message", "bot");
+      typingDiv.id = typingId;
+
+      const avatar = document.createElement("img");
+      avatar.src = "https://img.icons8.com/ios-filled/50/000000/robot-3.png";
+      avatar.classList.add("avatar");
+
+      const content = document.createElement("div");
+      content.classList.add("message-content", "typing");
+      content.innerText = "Bot is typing...";
+
+      typingDiv.appendChild(avatar);
+      typingDiv.appendChild(content);
+      messagesDiv.appendChild(typingDiv);
+      messagesDiv.scrollTop = messagesDiv.scrollHeight;
+
+      return typingId;
+    }
+
+    function removeTyping(id) {
+      const typingDiv = document.getElementById(id);
+      if (typingDiv) typingDiv.remove();
+    }
+
+    let recognition;
+    function startSpeech() {
+      if (!("webkitSpeechRecognition" in window)) {
+        alert("Speech recognition is not supported in this browser.");
+        return;
+      }
+
+      recognition = new webkitSpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = false;
+      recognition.lang = "en-US";
+
+      recognition.onstart = () => {
+        document.getElementById("micBtn").innerText = "🎙️";
+      };
+
+      recognition.onend = () => {
+        document.getElementById("micBtn").innerText = "🎤";
+      };
+
+      recognition.onerror = (event) => {
+        console.error("Speech error:", event);
+        document.getElementById("micBtn").innerText = "🎤";
+      };
+
+      recognition.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        document.getElementById("userInput").value = transcript;
+      };
+
+      recognition.start();
+    }
+
+    // TEXT-TO-SPEECH for bot replies
+    function speak(text) {
+      if ("speechSynthesis" in window) {
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = "en-US";
+        speechSynthesis.speak(utterance);
+      }
+    }
+
+    // Toggle TTS on/off button
+    function toggleTTS() {
+      ttsEnabled = !ttsEnabled;
+      const btn = document.getElementById("ttsToggleBtn");
+      btn.innerText = ttsEnabled ? "🔊 TTS: On" : "🔇 TTS: Off";
+
+      if (!ttsEnabled) {
+        // Stop any ongoing speech immediately when turned off
+        if ("speechSynthesis" in window) {
+          speechSynthesis.cancel();
+        }
+      }
+    }
+  </script>
+</body>
+</html>
